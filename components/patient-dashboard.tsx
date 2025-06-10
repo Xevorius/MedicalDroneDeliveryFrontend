@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { 
   Clock, 
   Package, 
@@ -8,7 +9,9 @@ import {
   AlertTriangle,
   CheckCircle,
   Plus,
-  Repeat
+  Repeat,
+  User,
+  UserPlus
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "components/ui/card"
 import { Badge } from "components/ui/badge"
@@ -17,6 +20,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "c
 import { type DashboardData, type Delivery } from "lib/dashboard-data"
 import { DeliveryRequestForm, type DeliveryRequestData } from "components/delivery-request-form"
 import { RecurringDeliveryManager, type RecurringSchedule } from "components/recurring-delivery-manager"
+import { 
+  getPatientRegistration, 
+  getDoctorById, 
+  getHospitalById,
+  type PatientRegistration 
+} from "lib/registration-data"
 
 interface PatientDashboardProps {
   data: DashboardData
@@ -72,6 +81,33 @@ function formatDate(date: Date) {
 
 export function PatientDashboard({ data, isMockData = false }: PatientDashboardProps) {
   const { user, deliveries, stats } = data
+  const [patientRegistration, setPatientRegistration] = useState<PatientRegistration | null>(null)
+  const [selectedDoctor, setSelectedDoctor] = useState<any>(null)
+  const [selectedHospital, setSelectedHospital] = useState<any>(null)
+
+  useEffect(() => {
+    // Check for registered patient data
+    const registration = getPatientRegistration()
+    if (registration) {
+      setPatientRegistration(registration)
+      
+      // Get doctor and hospital details
+      const doctor = getDoctorById(registration.preferences.doctorId)
+      const hospital = getHospitalById(registration.preferences.hospitalId)
+      
+      setSelectedDoctor(doctor)
+      setSelectedHospital(hospital)
+    }
+  }, [])
+
+  // Use registered user data if available, otherwise fall back to mock data
+  const displayUser = patientRegistration ? {
+    name: `${patientRegistration.personalInfo.firstName} ${patientRegistration.personalInfo.lastName}`,
+    email: patientRegistration.personalInfo.email,
+    phone: patientRegistration.personalInfo.phone,
+    healthId: patientRegistration.medicalInfo.healthId,
+    profilePicture: patientRegistration.personalInfo.profilePicture
+  } : user
 
   // Separate recurring and one-time deliveries
   const recurringDeliveries = deliveries.filter((d: Delivery) => d.isRecurring)
@@ -104,18 +140,38 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">        <div>
+    <div className="flex flex-col gap-6">      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
           <h1 className="text-3xl font-bold">My Health Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back, {user.name}
+            Welcome back, {displayUser.name}
             {isMockData && <span className="ml-2 text-xs text-orange-600">(Demo Mode)</span>}
+            {patientRegistration && <span className="ml-2 text-xs text-green-600">(Registered User)</span>}
           </p>
           <p className="text-sm text-muted-foreground">
-            Health ID: {user.healthId} • Assigned Doctor: {user.assignedDoctor}
+            Health ID: {displayUser.healthId}
+            {selectedDoctor && (
+              <span> • Dr. {selectedDoctor.name} ({selectedDoctor.specialty})</span>
+            )}
+            {selectedHospital && (
+              <span> • {selectedHospital.name}</span>
+            )}
           </p>
-        </div>        <div className="flex items-center gap-2">
+        </div>
+        
+        {/* Registration CTA for non-registered users */}
+        {!patientRegistration && (
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground mb-2">New to Medifly?</p>
+            <Button asChild size="sm" className="bg-brand-green-dark hover:bg-brand-green-dark/90">
+              <a href="/register">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Register Now
+              </a>
+            </Button>
+          </div>
+        )}<div className="flex items-center gap-2">
           <DeliveryRequestForm onSubmit={handleDeliveryRequest}>
             <Button variant="outline" size="sm" className="border-brand-green-light hover:border-brand-green-dark hover:shadow-md hover:shadow-brand-green-light/20">
               <Plus className="h-4 w-4 mr-2" />
@@ -330,6 +386,68 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
           </DeliveryRequestForm>
         </CardContent>
       </Card>
+
+      {/* User Profile Section for Registered Users */}
+      {patientRegistration && (
+        <Card className="border-brand-green-light/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Your Profile
+              <Badge variant="secondary" className="text-xs">Registered</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Personal Information</h4>
+                <div className="space-y-1 text-sm">
+                  <p><span className="font-medium">Name:</span> {patientRegistration.personalInfo.firstName} {patientRegistration.personalInfo.lastName}</p>
+                  <p><span className="font-medium">Email:</span> {patientRegistration.personalInfo.email}</p>
+                  <p><span className="font-medium">Phone:</span> {patientRegistration.personalInfo.phone}</p>
+                  <p><span className="font-medium">Blood Type:</span> {patientRegistration.medicalInfo.bloodType}</p>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Healthcare Provider</h4>
+                <div className="space-y-1 text-sm">
+                  {selectedHospital && (
+                    <p><span className="font-medium">Hospital:</span> {selectedHospital.name}</p>
+                  )}
+                  {selectedDoctor && (
+                    <>
+                      <p><span className="font-medium">Doctor:</span> Dr. {selectedDoctor.name}</p>
+                      <p><span className="font-medium">Specialty:</span> {selectedDoctor.specialty}</p>
+                      <p><span className="font-medium">Experience:</span> {selectedDoctor.experience} years</p>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Emergency Contact</h4>
+                <div className="space-y-1 text-sm">
+                  <p><span className="font-medium">Name:</span> {patientRegistration.medicalInfo.emergencyContact.name}</p>
+                  <p><span className="font-medium">Relationship:</span> {patientRegistration.medicalInfo.emergencyContact.relationship}</p>
+                  <p><span className="font-medium">Phone:</span> {patientRegistration.medicalInfo.emergencyContact.phone}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  <span className="font-medium">Delivery Address:</span> {patientRegistration.preferences.deliveryAddress}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Registered: {formatDate(patientRegistration.registeredAt)}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

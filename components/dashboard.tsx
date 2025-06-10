@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { 
   Clock, 
   Package, 
@@ -11,7 +11,10 @@ import {
   User,
   Check,
   X,
-  Eye
+  Eye,
+  Stethoscope,
+  MapPin,
+  Star
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "components/ui/card"
 import { Badge } from "components/ui/badge"
@@ -21,6 +24,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Textarea } from "components/ui/textarea"
 import { Label } from "components/ui/label"
 import { type DashboardData, type Delivery } from "lib/dashboard-data"
+import { 
+  getDoctorSession, 
+  getHospitalById,
+  type Doctor
+} from "lib/registration-data"
 
 interface DashboardProps {
   data: DashboardData
@@ -68,6 +76,27 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
   const { user, deliveries, stats } = data
   const [approvalNote, setApprovalNote] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
+  const [selectedHospital, setSelectedHospital] = useState<any>(null)
+
+  // Fetch doctor session data
+  useEffect(() => {
+    const session = getDoctorSession()
+    if (session) {
+      setSelectedDoctor(session)
+      const hospital = getHospitalById(session.hospitalId)
+      setSelectedHospital(hospital)
+    }
+  }, [])
+
+  // Use selected doctor data if available, otherwise fall back to mock data
+  const displayUser = selectedDoctor ? {
+    name: `Dr. ${selectedDoctor.name}`,
+    email: `${selectedDoctor.name.toLowerCase().replace(/\s+/g, '.')}@hospital.com`,
+    role: selectedDoctor.specialty,
+    department: selectedDoctor.specialty,
+    hospital: selectedHospital?.name || 'Medical Center'
+  } : user
 
   // Separate deliveries that need approval
   const needsApproval = deliveries.filter((d: Delivery) => d.approvalStatus === "pending")
@@ -92,22 +121,92 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">        <div>
+    <div className="flex flex-col gap-6">      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
           <h1 className="text-3xl font-bold">Doctor Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back, {user.name}
+            Welcome back, {displayUser.name}
             {isMockData && <span className="ml-2 text-xs text-orange-600">(Demo Mode)</span>}
+            {selectedDoctor && <span className="ml-2 text-xs text-green-600">(Demo Doctor)</span>}
           </p>
-        </div>        <div className="flex items-center gap-4">
+          {selectedDoctor && (
+            <p className="text-sm text-muted-foreground">
+              {selectedDoctor.specialty} • {selectedDoctor.experience} years experience • {selectedHospital?.name}
+            </p>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <User className="h-4 w-4" />
-            {user.hospital}
+            {displayUser.hospital}
           </div>
+          {!selectedDoctor && (
+            <Button asChild size="sm" variant="outline" className="border-brand-green-light hover:border-brand-green-dark">
+              <a href="/doctor-demo">
+                <Stethoscope className="h-4 w-4 mr-2" />
+                Select Doctor Profile
+              </a>
+            </Button>
+          )}
           <Button>Schedule Patient Delivery</Button>
         </div>
-      </div>      {/* Stats Grid */}
+      </div>
+
+      {/* Doctor Profile Section for Selected Doctors */}
+      {selectedDoctor && (
+        <Card className="border-brand-green-light/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Stethoscope className="h-5 w-5" />
+              Doctor Profile
+              <Badge variant="secondary" className="text-xs">Demo Session</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Professional Information</h4>
+                <div className="space-y-1 text-sm">
+                  <p><span className="font-medium">Name:</span> Dr. {selectedDoctor.name}</p>
+                  <p><span className="font-medium">Specialty:</span> {selectedDoctor.specialty}</p>
+                  <p><span className="font-medium">Experience:</span> {selectedDoctor.experience} years</p>
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium">Rating:</span>
+                    <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                    <span>{selectedDoctor.rating}/5</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Hospital Information</h4>
+                <div className="space-y-1 text-sm">
+                  {selectedHospital && (
+                    <>
+                      <p><span className="font-medium">Hospital:</span> {selectedHospital.name}</p>
+                      <p><span className="font-medium">Type:</span> {selectedHospital.type}</p>
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-4 w-4" />
+                        <span className="text-xs">{selectedHospital.address}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Statistics</h4>
+                <div className="space-y-1 text-sm">
+                  <p><span className="font-medium">Patients:</span> {selectedDoctor.patients}+</p>
+                  <p><span className="font-medium">Languages:</span> {selectedDoctor.languages.join(', ')}</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}{/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-brand-green-light/30 hover:border-brand-green-light hover:shadow-md hover:shadow-brand-green-light/10 transition-all">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

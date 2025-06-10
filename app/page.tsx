@@ -41,9 +41,21 @@ export default function HomePage() {
                     </Link>
                   </Button>
                   <Button variant="outline" size="lg" asChild>
-                    <Link href="/demo/doctor">
-                      Doctor View
+                    <Link href="/register">
+                      Patient Registration
                       <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+                <div className="flex gap-2 text-sm">
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href="/doctor-demo">
+                      Doctor Demo Access
+                    </Link>
+                  </Button>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href="/demo/patient">
+                      Patient Dashboard
                     </Link>
                   </Button>
                 </div>
