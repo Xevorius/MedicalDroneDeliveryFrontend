@@ -2,6 +2,7 @@
 
 import React, { useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { User, Heart, MapPin, Upload, ArrowRight, ArrowLeft, Check } from "lucide-react"
 import { Button } from "components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "components/ui/card"
@@ -9,11 +10,9 @@ import { Input } from "components/ui/input"
 import { Label } from "components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "components/ui/select"
 import { Textarea } from "components/ui/textarea"
-import { Badge } from "components/ui/badge"
 import { 
   type PatientRegistration as PatientRegistrationType,
   MOCK_HOSPITALS, 
-  MOCK_DOCTORS,
   savePatientRegistration,
   getDoctorsByHospital,
   generateHealthId
@@ -23,7 +22,7 @@ interface RegistrationStep {
   id: number
   title: string
   description: string
-  icon: React.ComponentType<any>
+  icon: React.ComponentType<{ className?: string }>
 }
 
 const STEPS: RegistrationStep[] = [
@@ -94,28 +93,27 @@ export function PatientRegistration() {
       }
     }))
   }
+  const updateMedicalInfo = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      medicalInfo: {
+        ...prev.medicalInfo!,
+        [field]: value
+      }
+    }))
+  }
 
-  const updateMedicalInfo = (field: string, value: any) => {
-    if (field === "emergencyContact") {
-      setFormData(prev => ({
-        ...prev,
-        medicalInfo: {
-          ...prev.medicalInfo!,
-          emergencyContact: {
-            ...prev.medicalInfo!.emergencyContact,
-            ...value
-          }
+  const updateEmergencyContact = (contactInfo: Record<string, string>) => {
+    setFormData(prev => ({
+      ...prev,
+      medicalInfo: {
+        ...prev.medicalInfo!,
+        emergencyContact: {
+          ...prev.medicalInfo!.emergencyContact,
+          ...contactInfo
         }
-      }))
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        medicalInfo: {
-          ...prev.medicalInfo!,
-          [field]: value
-        }
-      }))
-    }
+      }
+    }))
   }
 
   const updatePreferences = (field: string, value: string) => {
@@ -211,12 +209,10 @@ export function PatientRegistration() {
       </div>
 
       {/* Progress Steps */}
-      <div className="flex justify-between mb-8">
-        {STEPS.map((step, index) => {
+      <div className="flex justify-between mb-8">        {STEPS.map((step, index) => {
           const Icon = step.icon
           const isActive = currentStep === step.id
           const isCompleted = currentStep > step.id
-          const isValid = isStepValid(step.id)
           
           return (
             <div key={step.id} className="flex flex-col items-center flex-1">
@@ -248,12 +244,11 @@ export function PatientRegistration() {
       </div>
 
       <Card className="border-brand-green-light/30">        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {React.createElement(STEPS[currentStep - 1]?.icon || User, { className: "h-5 w-5" })}
-            {STEPS[currentStep - 1]?.title || 'Step'}
+          <CardTitle className="flex items-center gap-2">            {React.createElement(STEPS[currentStep - 1]?.icon ?? User, { className: "h-5 w-5" })}
+            {STEPS[currentStep - 1]?.title ?? 'Step'}
           </CardTitle>
           <CardDescription>
-            {STEPS[currentStep - 1]?.description || 'Step description'}
+            {STEPS[currentStep - 1]?.description ?? 'Step description'}
           </CardDescription>
         </CardHeader>
         
@@ -263,12 +258,13 @@ export function PatientRegistration() {
             <div className="space-y-4">
               <div className="flex flex-col items-center gap-4">
                 <div className="relative">
-                  <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
-                    {formData.personalInfo?.profilePicture ? (
-                      <img 
+                  <div className="w-24 h-24 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">                    {formData.personalInfo?.profilePicture ? (
+                      <Image 
                         src={formData.personalInfo.profilePicture} 
                         alt="Profile" 
-                        className="w-full h-full object-cover"
+                        width={96}
+                        height={96}
+                        className="w-full h-full object-cover rounded-full"
                       />
                     ) : (
                       <Upload className="h-8 w-8 text-gray-400" />
@@ -289,7 +285,7 @@ export function PatientRegistration() {
                   <Label htmlFor="firstName">First Name *</Label>
                   <Input
                     id="firstName"
-                    value={formData.personalInfo?.firstName || ""}
+                    value={formData.personalInfo?.firstName ?? ""}
                     onChange={(e) => updatePersonalInfo("firstName", e.target.value)}
                     placeholder="Enter first name"
                   />
@@ -298,7 +294,7 @@ export function PatientRegistration() {
                   <Label htmlFor="lastName">Last Name *</Label>
                   <Input
                     id="lastName"
-                    value={formData.personalInfo?.lastName || ""}
+                    value={formData.personalInfo?.lastName ?? ""}
                     onChange={(e) => updatePersonalInfo("lastName", e.target.value)}
                     placeholder="Enter last name"
                   />
@@ -311,14 +307,14 @@ export function PatientRegistration() {
                   <Input
                     id="dateOfBirth"
                     type="date"
-                    value={formData.personalInfo?.dateOfBirth || ""}
+                    value={formData.personalInfo?.dateOfBirth ?? ""}
                     onChange={(e) => updatePersonalInfo("dateOfBirth", e.target.value)}
                   />
                 </div>
                 <div>
                   <Label htmlFor="gender">Gender</Label>
                   <Select 
-                    value={formData.personalInfo?.gender || "male"} 
+                    value={formData.personalInfo?.gender ?? "male"} 
                     onValueChange={(value) => updatePersonalInfo("gender", value)}
                   >
                     <SelectTrigger>
@@ -337,7 +333,7 @@ export function PatientRegistration() {
                 <Label htmlFor="phone">Phone Number *</Label>
                 <Input
                   id="phone"
-                  value={formData.personalInfo?.phone || ""}
+                  value={formData.personalInfo?.phone ?? ""}
                   onChange={(e) => updatePersonalInfo("phone", e.target.value)}
                   placeholder="+86 xxx xxxx xxxx"
                 />
@@ -348,7 +344,7 @@ export function PatientRegistration() {
                 <Input
                   id="email"
                   type="email"
-                  value={formData.personalInfo?.email || ""}
+                  value={formData.personalInfo?.email ?? ""}
                   onChange={(e) => updatePersonalInfo("email", e.target.value)}
                   placeholder="your.email@example.com"
                 />
@@ -368,7 +364,7 @@ export function PatientRegistration() {
               <div>
                 <Label htmlFor="bloodType">Blood Type *</Label>
                 <Select 
-                  value={formData.medicalInfo?.bloodType || ""} 
+                  value={formData.medicalInfo?.bloodType ?? ""} 
                   onValueChange={(value) => updateMedicalInfo("bloodType", value)}
                 >
                   <SelectTrigger>
@@ -414,8 +410,8 @@ export function PatientRegistration() {
                     <Label htmlFor="emergencyName">Contact Name *</Label>
                     <Input
                       id="emergencyName"
-                      value={formData.medicalInfo?.emergencyContact?.name || ""}
-                      onChange={(e) => updateMedicalInfo("emergencyContact", { name: e.target.value })}
+                      value={formData.medicalInfo?.emergencyContact?.name ?? ""}
+                      onChange={(e) => updateEmergencyContact({ name: e.target.value })}
                       placeholder="Full name"
                     />
                   </div>
@@ -423,8 +419,8 @@ export function PatientRegistration() {
                     <Label htmlFor="emergencyRelationship">Relationship</Label>
                     <Input
                       id="emergencyRelationship"
-                      value={formData.medicalInfo?.emergencyContact?.relationship || ""}
-                      onChange={(e) => updateMedicalInfo("emergencyContact", { relationship: e.target.value })}
+                      value={formData.medicalInfo?.emergencyContact?.relationship ?? ""}
+                      onChange={(e) => updateEmergencyContact({ relationship: e.target.value })}
                       placeholder="e.g., Spouse, Parent, Sibling"
                     />
                   </div>
@@ -433,8 +429,8 @@ export function PatientRegistration() {
                   <Label htmlFor="emergencyPhone">Contact Phone *</Label>
                   <Input
                     id="emergencyPhone"
-                    value={formData.medicalInfo?.emergencyContact?.phone || ""}
-                    onChange={(e) => updateMedicalInfo("emergencyContact", { phone: e.target.value })}
+                    value={formData.medicalInfo?.emergencyContact?.phone ?? ""}
+                    onChange={(e) => updateEmergencyContact({ phone: e.target.value })}
                     placeholder="+86 xxx xxxx xxxx"
                   />
                 </div>
@@ -448,7 +444,7 @@ export function PatientRegistration() {
               <div>
                 <Label htmlFor="hospital">Select Hospital/Clinic *</Label>
                 <Select 
-                  value={formData.preferences?.hospitalId || ""} 
+                  value={formData.preferences?.hospitalId ?? ""} 
                   onValueChange={(value) => updatePreferences("hospitalId", value)}
                 >
                   <SelectTrigger>
@@ -471,7 +467,7 @@ export function PatientRegistration() {
                 <div>
                   <Label htmlFor="doctor">Select Doctor *</Label>
                   <Select 
-                    value={formData.preferences?.doctorId || ""} 
+                    value={formData.preferences?.doctorId ?? ""} 
                     onValueChange={(value) => updatePreferences("doctorId", value)}
                   >
                     <SelectTrigger>
@@ -496,7 +492,7 @@ export function PatientRegistration() {
               <div>
                 <Label htmlFor="language">Preferred Language</Label>
                 <Select 
-                  value={formData.preferences?.preferredLanguage || "english"} 
+                  value={formData.preferences?.preferredLanguage ?? "english"} 
                   onValueChange={(value) => updatePreferences("preferredLanguage", value)}
                 >
                   <SelectTrigger>
@@ -513,7 +509,7 @@ export function PatientRegistration() {
                 <Label htmlFor="address">Delivery Address *</Label>
                 <Textarea
                   id="address"
-                  value={formData.preferences?.deliveryAddress || ""}
+                  value={formData.preferences?.deliveryAddress ?? ""}
                   onChange={(e) => updatePreferences("deliveryAddress", e.target.value)}
                   placeholder="Enter your full delivery address"
                   className="resize-none"
@@ -525,7 +521,7 @@ export function PatientRegistration() {
                 <Label htmlFor="instructions">Delivery Instructions</Label>
                 <Textarea
                   id="instructions"
-                  value={formData.preferences?.deliveryInstructions || ""}
+                  value={formData.preferences?.deliveryInstructions ?? ""}
                   onChange={(e) => updatePreferences("deliveryInstructions", e.target.value)}
                   placeholder="Any special delivery instructions (optional)"
                   className="resize-none"

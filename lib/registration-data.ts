@@ -152,15 +152,22 @@ export function savePatientRegistration(registration: PatientRegistration): void
 }
 
 export function getPatientRegistration(): PatientRegistration | null {
+  // Check if we're in the browser environment
+  if (typeof window === 'undefined') return null
+  
   const stored = localStorage.getItem(PATIENT_STORAGE_KEY)
   if (!stored) return null
   
   try {
-    const parsed = JSON.parse(stored)
-    return {
-      ...parsed,
-      registeredAt: new Date(parsed.registeredAt)
+    const parsed = JSON.parse(stored) as Record<string, unknown>
+    // Type-safe conversion
+    if (parsed && typeof parsed === 'object' && 'registeredAt' in parsed) {
+      return {
+        ...(parsed as Omit<PatientRegistration, 'registeredAt'>),
+        registeredAt: new Date(parsed.registeredAt as string)
+      }
     }
+    return null
   } catch {
     return null
   }
@@ -176,11 +183,19 @@ export function saveDoctorSession(doctor: Doctor): void {
 }
 
 export function getDoctorSession(): Doctor | null {
+  // Check if we're in the browser environment
+  if (typeof window === 'undefined') return null
+  
   const stored = localStorage.getItem(DOCTOR_SESSION_KEY)
   if (!stored) return null
   
   try {
-    return JSON.parse(stored)
+    const parsed = JSON.parse(stored) as Record<string, unknown>
+    // Basic validation to ensure it matches Doctor interface
+    if (parsed && typeof parsed === 'object' && 'id' in parsed && 'name' in parsed) {
+      return parsed as unknown as Doctor
+    }
+    return null
   } catch {
     return null
   }

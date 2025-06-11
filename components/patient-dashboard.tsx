@@ -20,12 +20,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "c
 import { type DashboardData, type Delivery } from "lib/dashboard-data"
 import { DeliveryRequestForm, type DeliveryRequestData } from "components/delivery-request-form"
 import { RecurringDeliveryManager, type RecurringSchedule } from "components/recurring-delivery-manager"
+import { OrderDetailsModal } from "components/order-details-modal"
 import { 
   getPatientRegistration, 
-  getDoctorById, 
+  getDoctorById,
   getHospitalById,
-  type PatientRegistration 
+  type PatientRegistration,
+  type Doctor,
+  type Hospital 
 } from "lib/registration-data"
+import {
+  savePatientDelivery,
+  getPatientDeliveries,
+  createDeliveryFromPatientRequest
+} from "lib/delivery-management"
 
 interface PatientDashboardProps {
   data: DashboardData
@@ -80,25 +88,49 @@ function formatDate(date: Date) {
 }
 
 export function PatientDashboard({ data, isMockData = false }: PatientDashboardProps) {
-  const { user, deliveries, stats } = data
+  const { user, deliveries, stats } = data;
   const [patientRegistration, setPatientRegistration] = useState<PatientRegistration | null>(null)
-  const [selectedDoctor, setSelectedDoctor] = useState<any>(null)
-  const [selectedHospital, setSelectedHospital] = useState<any>(null)
-
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
+  const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null)
+  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [currentDeliveries, setCurrentDeliveries] = useState<Delivery[]>([])
+  
   useEffect(() => {
     // Check for registered patient data
     const registration = getPatientRegistration()
     if (registration) {
       setPatientRegistration(registration)
-      
       // Get doctor and hospital details
       const doctor = getDoctorById(registration.preferences.doctorId)
       const hospital = getHospitalById(registration.preferences.hospitalId)
       
-      setSelectedDoctor(doctor)
-      setSelectedHospital(hospital)
+      setSelectedDoctor(doctor ?? null)
+      setSelectedHospital(hospital ?? null)
+      
+      // Load deliveries for this specific patient
+      const savedDeliveries = getPatientDeliveries(registration.medicalInfo.healthId)
+      setCurrentDeliveries(savedDeliveries)
+    } else {
+      // Load deliveries without patient ID (will try to get from registration-data)
+      const savedDeliveries = getPatientDeliveries()
+      setCurrentDeliveries(savedDeliveries)
     }
-  }, [])
+  }, [deliveries])
+
+  // Calculate stats from actual deliveries
+  const calculatedStats = {
+    totalDeliveries: currentDeliveries.length,
+    successRate: currentDeliveries.length > 0 
+      ? Math.round((currentDeliveries.filter(d => d.status === "delivered").length / currentDeliveries.length) * 100)
+      : 100,
+    averageDeliveryTime: currentDeliveries.length > 0
+      ? Math.round(currentDeliveries.filter(d => d.actualTime).reduce((sum, d) => sum + (d.actualTime || 0), 0) / currentDeliveries.filter(d => d.actualTime).length) || 18
+      : 18,
+    costSavings: Math.round(currentDeliveries.reduce((sum, d) => sum + (d.cost * 0.3), 0)), // Assume 30% savings vs pharmacy trips
+    emergencyDeliveries: currentDeliveries.filter(d => d.isEmergency).length,
+    routineDeliveries: currentDeliveries.filter(d => !d.isEmergency).length,
+  }
 
   // Use registered user data if available, otherwise fall back to mock data
   const displayUser = patientRegistration ? {
@@ -107,23 +139,51 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
     phone: patientRegistration.personalInfo.phone,
     healthId: patientRegistration.medicalInfo.healthId,
     profilePicture: patientRegistration.personalInfo.profilePicture
-  } : user
-
-  // Separate recurring and one-time deliveries
-  const recurringDeliveries = deliveries.filter((d: Delivery) => d.isRecurring)
-  const pendingApprovals = deliveries.filter((d: Delivery) => d.approvalStatus === "pending")
-  const handleDeliveryRequest = (requestData: DeliveryRequestData) => {
+  } : user  // Separate recurring and one-time deliveries using current deliveries
+  const recurringDeliveries = currentDeliveries.filter((d: Delivery) => d.isRecurring)
+  const pendingApprovals = currentDeliveries.filter((d: Delivery) => d.approvalStatus === "pending")
+    const handleDeliveryRequest = (requestData: DeliveryRequestData) => {
     console.log("New delivery request:", requestData)
-    // In a real app, this would make an API call to submit the request
-    // For now, we'll just log it
+    
+    // Create new delivery and save it
+    const patientId = patientRegistration?.medicalInfo.healthId ?? displayUser.healthId
+    const doctorId = patientRegistration?.preferences.doctorId
+    
+    const newDelivery = doctorId 
+      ? createDeliveryFromPatientRequest(requestData as any, patientId as string, doctorId)
+      : createDeliveryFromPatientRequest(requestData as any, patientId as string)
+    savePatientDelivery(newDelivery, patientId as string)
+    
+    // Update local state
+    setCurrentDeliveries(prev => [newDelivery, ...prev])
   }
   
   const handleEmergencyRequest = (requestData: DeliveryRequestData) => {
     console.log("Emergency delivery request:", requestData)
-    // In a real app, this would make an API call to dispatch emergency drone
-    // For now, we'll just log it
+    
+    // Create emergency delivery and save it
+    const emergencyData = { ...requestData, isEmergency: true, urgencyLevel: "critical" as const }
+    const patientId = patientRegistration?.medicalInfo.healthId ?? displayUser.healthId
+    const doctorId = patientRegistration?.preferences.doctorId
+    
+    const newDelivery = doctorId 
+      ? createDeliveryFromPatientRequest(emergencyData as any, patientId as string, doctorId)
+      : createDeliveryFromPatientRequest(emergencyData as any, patientId as string)
+    savePatientDelivery(newDelivery, patientId as string)
+    
+    // Update local state
+    setCurrentDeliveries(prev => [newDelivery, ...prev])
   }
 
+  const handleRowClick = (delivery: Delivery) => {
+    setSelectedDelivery(delivery)
+    setIsModalOpen(true)
+  }
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setSelectedDelivery(null)
+  }
+  
   const handleAddRecurringSchedule = (scheduleData: Omit<RecurringSchedule, "id" | "nextDelivery">) => {
     console.log("New recurring schedule:", scheduleData)
     // In a real app, this would make an API call to create the schedule
@@ -133,11 +193,12 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
     console.log("Update recurring schedule:", id, scheduleData)
     // In a real app, this would make an API call to update the schedule
   }
-
+  
   const handleDeleteRecurringSchedule = (id: string) => {
     console.log("Delete recurring schedule:", id)
     // In a real app, this would make an API call to delete the schedule
   }
+  // ...existing code...
 
   return (
     <div className="flex flex-col gap-6">      {/* Header */}
@@ -159,8 +220,7 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
             )}
           </p>
         </div>
-        
-        {/* Registration CTA for non-registered users */}
+          {/* Registration CTA for non-registered users */}
         {!patientRegistration && (
           <div className="text-right">
             <p className="text-sm text-muted-foreground mb-2">New to Medifly?</p>
@@ -171,33 +231,45 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
               </a>
             </Button>
           </div>
-        )}<div className="flex items-center gap-2">
+        )}
+        
+        <div className="flex items-center gap-2">
           <DeliveryRequestForm onSubmit={handleDeliveryRequest}>
             <Button variant="outline" size="sm" className="border-brand-green-light hover:border-brand-green-dark hover:shadow-md hover:shadow-brand-green-light/20">
               <Plus className="h-4 w-4 mr-2" />
               Request Delivery
             </Button>
           </DeliveryRequestForm>
-          <RecurringDeliveryManager            schedules={recurringDeliveries.map((d: Delivery) => ({
+          <RecurringDeliveryManager schedules={recurringDeliveries.map((d: Delivery) => ({
               id: d.id,
-              medicationName: d.medicationName,
-              dosage: d.dosage ?? "Not specified",
-              quantity: d.quantity ?? "Not specified", 
+              medicines: d.medicationName ? [{
+                medicineId: `med-${d.id}`,
+                medicineName: d.medicationName,
+                dosage: d.dosage ?? "Not specified",
+                quantity: parseInt(d.quantity?.split(' ')[0] ?? "1") ?? 1,
+                unitType: d.quantity?.split(' ')[1] ?? "units",
+                instructions: d.notes
+              }] : [],
               frequency: "monthly" as const,
               preferredTime: "09:00",
               deliveryAddress: "Your registered address",
               isActive: true,
               nextDelivery: d.nextDelivery ?? new Date(),
-              prescriptionId: d.prescriptionId ?? "Not specified"
+              prescriptionId: d.prescriptionId ?? "Not specified",
+              // Legacy fields for backward compatibility
+              medicationName: d.medicationName,
+              dosage: d.dosage ?? "Not specified",
+              quantity: d.quantity ?? "Not specified"
             }))}
             onAddSchedule={handleAddRecurringSchedule}
             onUpdateSchedule={handleUpdateRecurringSchedule}
-            onDeleteSchedule={handleDeleteRecurringSchedule}          >
+            onDeleteSchedule={handleDeleteRecurringSchedule}>
             <Button variant="outline" size="sm" className="border-brand-green-light hover:border-brand-green-dark hover:shadow-md hover:shadow-brand-green-light/20">
               <Repeat className="h-4 w-4 mr-2" />
               Manage Recurring
             </Button>
           </RecurringDeliveryManager>
+          
           <DeliveryRequestForm isEmergency onSubmit={handleEmergencyRequest}>
             <Button variant="destructive" size="sm">
               <AlertTriangle className="h-4 w-4 mr-2" />
@@ -205,7 +277,7 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
             </Button>
           </DeliveryRequestForm>
         </div>
-      </div>      {/* Quick Stats */}
+      </div>{/* Quick Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-brand-green-light/30 hover:border-brand-green-light hover:shadow-md hover:shadow-brand-green-light/10 transition-all">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -213,7 +285,7 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalDeliveries}</div>
+            <div className="text-2xl font-bold">{calculatedStats.totalDeliveries}</div>
             <p className="text-xs text-muted-foreground">
               This year
             </p>
@@ -226,7 +298,7 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.successRate}%</div>
+            <div className="text-2xl font-bold">{calculatedStats.successRate}%</div>
             <p className="text-xs text-muted-foreground">
               On-time deliveries
             </p>
@@ -237,7 +309,7 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.averageDeliveryTime}min</div>
+            <div className="text-2xl font-bold">{calculatedStats.averageDeliveryTime}min</div>
             <p className="text-xs text-muted-foreground">
               To your location
             </p>
@@ -250,7 +322,7 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.costSavings}</div>
+            <div className="text-2xl font-bold">${calculatedStats.costSavings}</div>
             <p className="text-xs text-muted-foreground">
               vs pharmacy trips
             </p>
@@ -315,16 +387,19 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
                 </div>
               ))}
             </div>
-          </CardContent>
+            </CardContent>
         </Card>
-      )}      {/* Recent Deliveries */}
+      )}
+
+      {/* Recent Deliveries */}
       <Card className="border-brand-green-light/30 hover:border-brand-green-light/50 transition-colors">
         <CardHeader>
           <CardTitle>Recent Deliveries</CardTitle>
           <CardDescription>
-            Your latest medication deliveries
+            Your latest medication deliveries • Click any row for details
           </CardDescription>
-        </CardHeader><CardContent>
+          </CardHeader>
+        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
@@ -337,25 +412,41 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deliveries.slice(0, 5).map((delivery: Delivery) => (
-                <TableRow key={delivery.id}>
-                  <TableCell className="font-medium">
-                    <div>
-                      {delivery.medicationName}
-                      {delivery.isRecurring && (
-                        <Repeat className="h-3 w-3 inline ml-2 text-muted-foreground" />
-                      )}
+              {currentDeliveries.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Package className="h-8 w-8" />
+                      <p>No deliveries yet</p>
+                      <p className="text-sm">Use the "Request Delivery" button above to create your first order</p>
                     </div>
                   </TableCell>
-                  <TableCell>{getStatusBadge(delivery.status)}</TableCell>
-                  <TableCell>{getApprovalBadge(delivery.approvalStatus)}</TableCell>
-                  <TableCell>{formatDateTime(delivery.requestedAt)}</TableCell>
-                  <TableCell>
-                    {delivery.deliveredAt ? formatDateTime(delivery.deliveredAt) : "-"}
-                  </TableCell>
-                  <TableCell>${delivery.cost.toFixed(2)}</TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                currentDeliveries.slice(0, 5).map((delivery: Delivery) => (
+                  <TableRow 
+                    key={delivery.id} 
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleRowClick(delivery)}
+                  >
+                    <TableCell className="font-medium">
+                      <div>
+                        {delivery.medicationName}
+                        {delivery.isRecurring && (
+                          <Repeat className="h-3 w-3 inline ml-2 text-muted-foreground" />
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{getStatusBadge(delivery.status)}</TableCell>
+                    <TableCell>{getApprovalBadge(delivery.approvalStatus)}</TableCell>
+                    <TableCell>{formatDateTime(delivery.requestedAt)}</TableCell>
+                    <TableCell>
+                      {delivery.deliveredAt ? formatDateTime(delivery.deliveredAt) : "-"}
+                    </TableCell>
+                    <TableCell>${delivery.cost.toFixed(2)}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -378,7 +469,9 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
             <p>• All emergency requests are reviewed afterward for medical necessity</p>
             <p>• Non-covered emergency requests will be billed to you directly</p>
             <p>• Average emergency response time: 8-12 minutes</p>
-          </div>          <DeliveryRequestForm isEmergency onSubmit={handleEmergencyRequest}>
+          </div>
+          
+          <DeliveryRequestForm isEmergency onSubmit={handleEmergencyRequest}>
             <Button variant="destructive" className="mt-4">
               <AlertTriangle className="h-4 w-4 mr-2" />
               Request Emergency Delivery
@@ -444,10 +537,17 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
                   Registered: {formatDate(patientRegistration.registeredAt)}
                 </div>
               </div>
-            </div>
-          </CardContent>
+            </div>          </CardContent>
         </Card>
       )}
+
+      {/* Order Details Modal */}
+      <OrderDetailsModal
+        delivery={selectedDelivery}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        userType="patient"
+      />
     </div>
   )
 }

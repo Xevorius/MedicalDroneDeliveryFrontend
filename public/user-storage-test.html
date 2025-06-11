@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Storage Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5; 
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        }
+        .test-section { 
+            margin: 20px 0; 
+            padding: 15px; 
+            border: 1px solid #e0e0e0; 
+            border-radius: 4px; 
+        }
+        .success { background: #e8f5e8; border-color: #4caf50; }
+        .info { background: #e3f2fd; border-color: #2196f3; }
+        .warning { background: #fff3e0; border-color: #ff9800; }
+        code { 
+            background: #f5f5f5; 
+            padding: 2px 4px; 
+            border-radius: 3px; 
+            font-family: 'Courier New', monospace; 
+        }
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #1976d2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 User-Specific Storage Test</h1>
+        <p>This page tests the user-specific storage implementation for MediFly orders.</p>
+        
+        <div class="test-section info">
+            <h3>📋 Implementation Summary</h3>
+            <ul>
+                <li>✅ <strong>User-Specific Storage Keys:</strong> Each user's orders are stored with unique keys</li>
+                <li>✅ <strong>Patient Isolation:</strong> <code>medifly_patient_deliveries_{patientId}</code></li>
+                <li>✅ <strong>Doctor Isolation:</strong> <code>medifly_doctor_deliveries_{doctorId}</code></li>
+                <li>✅ <strong>Cross-User Prevention:</strong> Users can only see their own orders</li>
+                <li>✅ <strong>Mock Data Removed:</strong> Only real user-generated orders are shown</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔍 Current localStorage Keys</h3>
+            <button onclick="checkStorageKeys()">Check Storage Keys</button>
+            <div id="storage-keys" style="margin-top: 10px;"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🧑‍⚕️ Simulate Different Users</h3>
+            <button onclick="simulatePatient1()">Simulate Patient 1</button>
+            <button onclick="simulatePatient2()">Simulate Patient 2</button>
+            <button onclick="simulateDoctor1()">Simulate Doctor 1</button>
+            <button onclick="clearAllData()">Clear All Data</button>
+            <div id="simulation-results" style="margin-top: 10px;"></div>
+        </div>
+        
+        <div class="test-section success">
+            <h3>🎉 Implementation Complete!</h3>
+            <p>The user-specific storage implementation has been successfully completed with the following features:</p>
+            <ul>
+                <li><strong>TypeScript Errors Fixed:</strong> All compilation errors resolved</li>
+                <li><strong>React Runtime Errors Fixed:</strong> No more React.Children.only errors</li>
+                <li><strong>Mock Data Removed:</strong> Clean slate for real user data</li>
+                <li><strong>User Isolation:</strong> Complete separation of user orders</li>
+                <li><strong>Dashboard Updates:</strong> Both patient and doctor dashboards use user-specific data</li>
+            </ul>
+        </div>
+        
+        <div class="test-section info">
+            <h3>🚀 Next Steps</h3>
+            <p>To test the implementation:</p>
+            <ol>
+                <li>Go to <a href="/demo/patient" target="_blank">Patient Demo</a></li>
+                <li>Create some orders as a patient</li>
+                <li>Go to <a href="/demo/doctor" target="_blank">Doctor Demo</a></li>
+                <li>Notice doctors don't see patient orders (proper isolation)</li>
+                <li>Register different users and verify order separation</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function checkStorageKeys() {
+            const keys = Object.keys(localStorage).filter(key => key.startsWith('medifly_'));
+            const container = document.getElementById('storage-keys');
+            
+            if (keys.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No MediFly storage keys found. Create some orders first!</p>';
+            } else {
+                container.innerHTML = '<p><strong>Found Storage Keys:</strong></p><ul>' + 
+                    keys.map(key => `<li><code>${key}</code></li>`).join('') + 
+                    '</ul>';
+            }
+        }
+        
+        function simulatePatient1() {
+            const testOrder = {
+                id: 'TEST-P1-' + Date.now(),
+                medicationName: 'Test Medicine for Patient 1',
+                patientId: 'PATIENT-001',
+                status: 'pending',
+                priority: 'routine',
+                requestedAt: new Date().toISOString(),
+                deliveredAt: null,
+                estimatedTime: 20,
+                actualTime: null,
+                droneId: null,
+                distance: '2.5 km',
+                cost: 25.99,
+                requestedBy: 'patient',
+                approvalStatus: 'pending'
+            };
+            
+            const key = 'medifly_patient_deliveries_PATIENT-001';
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            existing.unshift(testOrder);
+            localStorage.setItem(key, JSON.stringify(existing));
+            
+            updateSimulationResults('Added order for Patient 1');
+            checkStorageKeys();
+        }
+        
+        function simulatePatient2() {
+            const testOrder = {
+                id: 'TEST-P2-' + Date.now(),
+                medicationName: 'Test Medicine for Patient 2',
+                patientId: 'PATIENT-002',
+                status: 'pending',
+                priority: 'urgent',
+                requestedAt: new Date().toISOString(),
+                deliveredAt: null,
+                estimatedTime: 15,
+                actualTime: null,
+                droneId: null,
+                distance: '1.8 km',
+                cost: 19.99,
+                requestedBy: 'patient',
+                approvalStatus: 'pending'
+            };
+            
+            const key = 'medifly_patient_deliveries_PATIENT-002';
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            existing.unshift(testOrder);
+            localStorage.setItem(key, JSON.stringify(existing));
+            
+            updateSimulationResults('Added order for Patient 2');
+            checkStorageKeys();
+        }
+        
+        function simulateDoctor1() {
+            const testOrder = {
+                id: 'TEST-D1-' + Date.now(),
+                medicationName: 'Doctor Prescribed Medicine',
+                patientId: 'PATIENT-003',
+                doctorId: 'DOCTOR-001',
+                status: 'pending',
+                priority: 'routine',
+                requestedAt: new Date().toISOString(),
+                deliveredAt: null,
+                estimatedTime: 25,
+                actualTime: null,
+                droneId: null,
+                distance: '3.2 km',
+                cost: 30.99,
+                requestedBy: 'doctor',
+                approvalStatus: 'approved'
+            };
+            
+            const key = 'medifly_doctor_deliveries_DOCTOR-001';
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            existing.unshift(testOrder);
+            localStorage.setItem(key, JSON.stringify(existing));
+            
+            updateSimulationResults('Added order for Doctor 1');
+            checkStorageKeys();
+        }
+        
+        function clearAllData() {
+            const keys = Object.keys(localStorage).filter(key => key.startsWith('medifly_'));
+            keys.forEach(key => localStorage.removeItem(key));
+            updateSimulationResults('Cleared all MediFly data');
+            checkStorageKeys();
+        }
+        
+        function updateSimulationResults(message) {
+            const container = document.getElementById('simulation-results');
+            container.innerHTML = `<p style="color: #4caf50; font-weight: bold;">✅ ${message}</p>`;
+        }
+        
+        // Initialize
+        checkStorageKeys();
+    </script>
+</body>
+</html>

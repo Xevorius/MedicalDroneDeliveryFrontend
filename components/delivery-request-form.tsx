@@ -10,6 +10,8 @@ import { Textarea } from "components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "components/ui/dialog"
 import { Badge } from "components/ui/badge"
+import { MedicineSelection } from "components/medicine-selection"
+import { type MedicineOrder } from "lib/medicine-data"
 
 interface DeliveryRequestFormProps {
   isEmergency?: boolean
@@ -18,9 +20,7 @@ interface DeliveryRequestFormProps {
 }
 
 export interface DeliveryRequestData {
-  medicationName: string
-  quantity: string
-  dosage: string
+  medicines: MedicineOrder[]
   prescriptionId: string
   deliveryAddress: string
   phoneNumber: string
@@ -33,9 +33,7 @@ export function DeliveryRequestForm({ isEmergency = false, onSubmit, children }:
   const [isOpen, setIsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState<DeliveryRequestData>({
-    medicationName: "",
-    quantity: "",
-    dosage: "",
+    medicines: [],
     prescriptionId: "",
     deliveryAddress: "",
     phoneNumber: "",
@@ -46,6 +44,13 @@ export function DeliveryRequestForm({ isEmergency = false, onSubmit, children }:
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validate that at least one medicine is selected
+    if (formData.medicines.length === 0) {
+      alert("Please select at least one medicine.")
+      return
+    }
+    
     setIsSubmitting(true)
     
     try {
@@ -58,9 +63,7 @@ export function DeliveryRequestForm({ isEmergency = false, onSubmit, children }:
       
       // Reset form and close dialog
       setFormData({
-        medicationName: "",
-        quantity: "",
-        dosage: "",
+        medicines: [],
         prescriptionId: "",
         deliveryAddress: "",
         phoneNumber: "",
@@ -83,8 +86,14 @@ export function DeliveryRequestForm({ isEmergency = false, onSubmit, children }:
     }
   }
 
-  const updateFormData = (field: keyof DeliveryRequestData, value: string) => {
+  const updateFormData = (field: keyof Omit<DeliveryRequestData, 'medicines'>, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+  }
+  const handleMedicineAdd = (order: MedicineOrder) => {
+    setFormData(prev => ({
+      ...prev,
+      medicines: [...prev.medicines, order]
+    }))
   }
 
   return (
@@ -134,52 +143,32 @@ export function DeliveryRequestForm({ isEmergency = false, onSubmit, children }:
               </div>
             </CardContent>
           </Card>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="medicationName">Medication Name *</Label>
-              <Input
-                id="medicationName"
-                placeholder="e.g., Lisinopril, Metformin"
-                value={formData.medicationName}
-                onChange={(e) => updateFormData("medicationName", e.target.value)}
-                required
-              />
+        )}        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Medicine Selection */}
+          <div className="space-y-4">
+            <div>
+              <Label className="text-base font-medium">Select Medicines *</Label>
+              <p className="text-sm text-muted-foreground mb-4">
+                Choose from our medicine database. {isEmergency ? "Emergency medicines only." : "All medicines available."}
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Quantity *</Label>
-              <Input
-                id="quantity"
-                placeholder="e.g., 30 tablets, 1 bottle"
-                value={formData.quantity}
-                onChange={(e) => updateFormData("quantity", e.target.value)}
-                required
-              />
-            </div>
+            <MedicineSelection
+              onMedicineAdd={handleMedicineAdd}
+              selectedMedicines={formData.medicines}
+            maxSelections={isEmergency ? 3 : 10}
+              emergencyOnly={isEmergency}
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="dosage">Dosage *</Label>
-              <Input
-                id="dosage"
-                placeholder="e.g., 10mg, 500mg"
-                value={formData.dosage}
-                onChange={(e) => updateFormData("dosage", e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="prescriptionId">Prescription ID</Label>
-              <Input
-                id="prescriptionId"
-                placeholder="e.g., RX-123456"
-                value={formData.prescriptionId}
-                onChange={(e) => updateFormData("prescriptionId", e.target.value)}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="prescriptionId">Prescription ID</Label>
+            <Input
+              id="prescriptionId"
+              placeholder="e.g., RX-123456"
+              value={formData.prescriptionId}
+              onChange={(e) => updateFormData("prescriptionId", e.target.value)}
+            />
           </div>
 
           {!isEmergency && (
@@ -256,10 +245,9 @@ export function DeliveryRequestForm({ isEmergency = false, onSubmit, children }:
               disabled={isSubmitting}
             >
               Cancel
-            </Button>
-            <Button
+            </Button>            <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || formData.medicines.length === 0}
               variant={isEmergency ? "destructive" : "default"}
               className="flex-1"
             >

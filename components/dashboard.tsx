@@ -14,7 +14,8 @@ import {
   Eye,
   Stethoscope,
   MapPin,
-  Star
+  Star,
+  Plus
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "components/ui/card"
 import { Badge } from "components/ui/badge"
@@ -23,12 +24,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "c
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "components/ui/dialog"
 import { Textarea } from "components/ui/textarea"
 import { Label } from "components/ui/label"
+import { AddMedicineForm } from "components/add-medicine-form"
+import { OrderDetailsModal } from "components/order-details-modal"
 import { type DashboardData, type Delivery } from "lib/dashboard-data"
 import { 
   getDoctorSession, 
   getHospitalById,
-  type Doctor
+  type Doctor,
+  type Hospital
 } from "lib/registration-data"
+import { type Medicine } from "lib/medicine-data"
+import {
+  saveDoctorDelivery,
+  getDoctorDeliveries,
+  updateDeliveryApprovalStatus,
+  getDeliveriesForDoctor
+} from "lib/delivery-management"
 
 interface DashboardProps {
   data: DashboardData
@@ -77,17 +88,40 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
   const [approvalNote, setApprovalNote] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
-  const [selectedHospital, setSelectedHospital] = useState<any>(null)
-
-  // Fetch doctor session data
+  const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null)
+  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [currentDeliveries, setCurrentDeliveries] = useState<Delivery[]>([])  // Fetch doctor session data
   useEffect(() => {
     const session = getDoctorSession()
     if (session) {
       setSelectedDoctor(session)
       const hospital = getHospitalById(session.hospitalId)
-      setSelectedHospital(hospital)
+      setSelectedHospital(hospital ?? null)
+      
+      // Load deliveries for this specific doctor
+      const savedDeliveries = getDoctorDeliveries(session.id)
+      setCurrentDeliveries(savedDeliveries)
+    } else {
+      // Load deliveries without doctor ID (will try to get from session)
+      const savedDeliveries = getDoctorDeliveries()
+      setCurrentDeliveries(savedDeliveries)
     }
-  }, [])
+  }, [deliveries])
+
+  // Calculate stats from actual deliveries
+  const calculatedStats = {
+    totalDeliveries: currentDeliveries.length,
+    successRate: currentDeliveries.length > 0 
+      ? Math.round((currentDeliveries.filter(d => d.status === "delivered").length / currentDeliveries.length) * 100)
+      : 100,
+    averageDeliveryTime: currentDeliveries.length > 0
+      ? Math.round(currentDeliveries.filter(d => d.actualTime).reduce((sum, d) => sum + (d.actualTime || 0), 0) / currentDeliveries.filter(d => d.actualTime).length) || 18
+      : 18,
+    costSavings: Math.round(currentDeliveries.reduce((sum, d) => sum + (d.cost * 0.2), 0)), // Assume 20% cost reduction for doctors
+    emergencyDeliveries: currentDeliveries.filter(d => d.isEmergency).length,
+    routineDeliveries: currentDeliveries.filter(d => !d.isEmergency).length,
+  }
 
   // Use selected doctor data if available, otherwise fall back to mock data
   const displayUser = selectedDoctor ? {
@@ -95,21 +129,53 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
     email: `${selectedDoctor.name.toLowerCase().replace(/\s+/g, '.')}@hospital.com`,
     role: selectedDoctor.specialty,
     department: selectedDoctor.specialty,
-    hospital: selectedHospital?.name || 'Medical Center'
-  } : user
+    hospital: selectedHospital?.name ?? 'Medical Center'
+  } : user  // Separate deliveries that need approval using current deliveries
+  const needsApproval = currentDeliveries.filter((d: Delivery) => d.approvalStatus === "pending")
 
-  // Separate deliveries that need approval
-  const needsApproval = deliveries.filter((d: Delivery) => d.approvalStatus === "pending")
+  // Handle row click for order details
+  const handleRowClick = (delivery: Delivery) => {
+    setSelectedDelivery(delivery)
+    setIsModalOpen(true)
+  }
 
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setSelectedDelivery(null)
+  }
   const handleApproval = async (deliveryId: string, approved: boolean, note?: string) => {
     setIsProcessing(true)
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000))
       
-      console.log(`${approved ? 'Approved' : 'Denied'} delivery ${deliveryId}`, { note })
-        // In a real app, this would update the backend and refresh the data
-      alert(`Delivery ${approved ? 'approved' : 'denied'} successfully!`)
+      const doctorId = selectedDoctor?.id ?? "DOCTOR-001"
+      const success = updateDeliveryApprovalStatus(
+        deliveryId, 
+        approved ? "approved" : "denied", 
+        doctorId
+      )
+      
+      if (success) {
+        setCurrentDeliveries(prev => 
+          prev.map(d => 
+            d.id === deliveryId 
+              ? { 
+                  ...d, 
+                  approvalStatus: approved ? "approved" as const : "denied" as const, 
+                  status: approved ? "pending" as const : "cancelled" as const,
+                  approvedBy: doctorId,
+                  approvedAt: new Date()
+                }
+              : d
+          )
+        )
+        
+        console.log(`${approved ? 'Approved' : 'Denied'} delivery ${deliveryId}`, { note })
+        alert(`Delivery ${approved ? 'approved' : 'denied'} successfully!`)
+      } else {
+        throw new Error("Failed to update delivery status")
+      }
       
       setApprovalNote("")
     } catch (error) {
@@ -117,11 +183,10 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
       alert("Error processing approval. Please try again.")
     } finally {
       setIsProcessing(false)
-    }
-  }
+    }  }
 
   return (
-    <div className="flex flex-col gap-6">      {/* Header */}
+    <div className="flex flex-col gap-6">{/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Doctor Dashboard</h1>
@@ -214,7 +279,7 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalDeliveries}</div>
+            <div className="text-2xl font-bold">{calculatedStats.totalDeliveries}</div>
             <p className="text-xs text-muted-foreground">
               +12% from last month
             </p>
@@ -227,7 +292,7 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.successRate}%</div>
+            <div className="text-2xl font-bold">{calculatedStats.successRate}%</div>
             <p className="text-xs text-muted-foreground">
               +0.5% from last month
             </p>
@@ -240,7 +305,7 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.averageDeliveryTime}min</div>
+            <div className="text-2xl font-bold">{calculatedStats.averageDeliveryTime}min</div>
             <p className="text-xs text-muted-foreground">
               -2.1min from last month
             </p>
@@ -251,13 +316,47 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.costSavings.toLocaleString()}</div>
+            <div className="text-2xl font-bold">${calculatedStats.costSavings.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
               vs traditional delivery
             </p>
-          </CardContent>
-        </Card>
+          </CardContent>        </Card>
       </div>
+
+      {/* Medicine Management Section */}
+      <Card className="border-brand-green-light/30 hover:border-brand-green-light/50 transition-colors">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            Medicine Database Management
+          </CardTitle>
+          <CardDescription>
+            Add new medicines to the system database for patient ordering
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">
+                Manage the centralized medicine database that patients can order from.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Added medicines will be available for all patients to select during delivery requests.
+              </p>
+            </div>            <AddMedicineForm 
+              onMedicineAdded={(medicine: Medicine) => {
+                console.log("New medicine added:", medicine)
+                // In a real app, this would refresh the medicine list
+                alert(`Successfully added ${medicine.name} to the medicine database!`)
+              }}
+            >
+              <Button className="bg-brand-green-dark hover:bg-brand-green-dark/90">                <Plus className="h-4 w-4 mr-2" />
+                Add Medicine
+              </Button>
+            </AddMedicineForm>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Pending Approvals Alert */}
       {needsApproval.length > 0 && (
@@ -394,14 +493,14 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
             </div>
           </CardContent>
         </Card>
-      )}      {/* Recent Deliveries */}
-      <Card className="border-brand-green-light/30 hover:border-brand-green-light/50 transition-colors">
+      )}<Card className="border-brand-green-light/30 hover:border-brand-green-light/50 transition-colors">
         <CardHeader>
           <CardTitle>Recent Deliveries</CardTitle>
           <CardDescription>
-            Your latest medical supply deliveries
+            Your latest medical supply deliveries • Click any row for details
           </CardDescription>
-        </CardHeader><CardContent>
+        </CardHeader>
+        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
@@ -415,21 +514,37 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deliveries.map((delivery: Delivery) => (
-                <TableRow key={delivery.id}>
-                  <TableCell className="font-medium">
-                    {delivery.medicationName}
+              {currentDeliveries.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Package className="h-8 w-8" />
+                      <p>No delivery requests yet</p>
+                      <p className="text-sm">Patient requests will appear here for your review and approval</p>
+                    </div>
                   </TableCell>
-                  <TableCell>{delivery.patientId}</TableCell>
-                  <TableCell>{getStatusBadge(delivery.status)}</TableCell>
-                  <TableCell>{getPriorityBadge(delivery.priority)}</TableCell>
-                  <TableCell>{formatDateTime(delivery.requestedAt)}</TableCell>
-                  <TableCell>
-                    {delivery.actualTime ? `${delivery.actualTime}min` : `~${delivery.estimatedTime}min`}
-                  </TableCell>
-                  <TableCell>${delivery.cost.toFixed(2)}</TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                currentDeliveries.map((delivery: Delivery) => (
+                  <TableRow
+                    key={delivery.id}
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleRowClick(delivery)}
+                  >
+                    <TableCell className="font-medium">
+                      {delivery.medicationName}
+                    </TableCell>
+                    <TableCell>{delivery.patientId}</TableCell>
+                    <TableCell>{getStatusBadge(delivery.status)}</TableCell>
+                    <TableCell>{getPriorityBadge(delivery.priority)}</TableCell>
+                    <TableCell>{formatDateTime(delivery.requestedAt)}</TableCell>
+                    <TableCell>
+                      {delivery.actualTime ? `${delivery.actualTime}min` : `~${delivery.estimatedTime}min`}
+                    </TableCell>
+                    <TableCell>${delivery.cost.toFixed(2)}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -448,7 +563,7 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-orange-600">{stats.emergencyDeliveries}</div>
+            <div className="text-3xl font-bold text-orange-600">{calculatedStats.emergencyDeliveries}</div>
             <p className="text-sm text-muted-foreground mt-2">
               Average response time: 11.2 minutes
             </p>
@@ -482,9 +597,18 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
               </div>
             </div>
             <Button variant="outline" className="mt-4">View Full Report</Button>
-          </CardContent>
-        </Card>
+          </CardContent>        </Card>
       </div>
+
+      {/* Order Details Modal */}
+      <OrderDetailsModal
+        delivery={selectedDelivery}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        userType="doctor"
+        onApprove={(deliveryId) => handleApproval(deliveryId, true)}
+        onDeny={(deliveryId) => handleApproval(deliveryId, false)}
+      />
     </div>
   )
 }

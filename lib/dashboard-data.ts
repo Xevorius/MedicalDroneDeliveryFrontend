@@ -42,6 +42,10 @@ export interface Delivery {
   dosage?: string // Medication strength (e.g., "10mg", "500mg")
   notes?: string // Additional notes from patient or doctor
   prescriptionId?: string // Reference to prescription
+  doctorId?: string // Assigned doctor for approval
+  approvedBy?: string // Doctor who approved/denied
+  approvedAt?: Date // When approved/denied
+  isEmergency?: boolean // Emergency request flag
 }
 
 export interface DashboardStats {
