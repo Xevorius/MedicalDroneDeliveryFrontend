@@ -401,20 +401,19 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
           </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader>
-              <TableRow>
+            <TableHeader>              <TableRow>
                 <TableHead>Medication</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Approval</TableHead>
                 <TableHead>Requested</TableHead>
                 <TableHead>Delivered</TableHead>
                 <TableHead>Cost</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {currentDeliveries.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+              {currentDeliveries.length === 0 ? (                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Package className="h-8 w-8" />
                       <p>No deliveries yet</p>
@@ -422,13 +421,8 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : (
-                currentDeliveries.slice(0, 5).map((delivery: Delivery) => (
-                  <TableRow 
-                    key={delivery.id} 
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => handleRowClick(delivery)}
-                  >
+              ) : (                currentDeliveries.slice(0, 5).map((delivery: Delivery) => (
+                  <TableRow key={delivery.id}>
                     <TableCell className="font-medium">
                       <div>
                         {delivery.medicationName}
@@ -444,6 +438,24 @@ export function PatientDashboard({ data, isMockData = false }: PatientDashboardP
                       {delivery.deliveredAt ? formatDateTime(delivery.deliveredAt) : "-"}
                     </TableCell>
                     <TableCell>${delivery.cost.toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => window.open(`/tracking?id=${delivery.id}&type=patient`, '_blank')}
+                        >
+                          Track
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleRowClick(delivery)}
+                        >
+                          Details
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}

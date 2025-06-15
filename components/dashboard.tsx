@@ -502,8 +502,7 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader>
-              <TableRow>
+            <TableHeader>              <TableRow>
                 <TableHead>Medication</TableHead>
                 <TableHead>Patient ID</TableHead>
                 <TableHead>Status</TableHead>
@@ -511,12 +510,12 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
                 <TableHead>Requested</TableHead>
                 <TableHead>Time</TableHead>
                 <TableHead>Cost</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {currentDeliveries.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+              {currentDeliveries.length === 0 ? (                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Package className="h-8 w-8" />
                       <p>No delivery requests yet</p>
@@ -524,13 +523,8 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : (
-                currentDeliveries.map((delivery: Delivery) => (
-                  <TableRow
-                    key={delivery.id}
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => handleRowClick(delivery)}
-                  >
+              ) : (                currentDeliveries.map((delivery: Delivery) => (
+                  <TableRow key={delivery.id}>
                     <TableCell className="font-medium">
                       {delivery.medicationName}
                     </TableCell>
@@ -542,6 +536,24 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
                       {delivery.actualTime ? `${delivery.actualTime}min` : `~${delivery.estimatedTime}min`}
                     </TableCell>
                     <TableCell>${delivery.cost.toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => window.open(`/tracking?id=${delivery.id}&type=doctor`, '_blank')}
+                        >
+                          Track
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleRowClick(delivery)}
+                        >
+                          Details
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}

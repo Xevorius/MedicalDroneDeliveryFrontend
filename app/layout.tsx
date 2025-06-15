@@ -4,6 +4,7 @@ import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
 import { ThemeProvider } from "components/theme-provider";
+import { DeliveryProgressionInitializer } from "components/delivery-progression-initializer";
 
 export const metadata: Metadata = {
   title: "Medifly - Medical Supply Delivery Demo",
@@ -28,6 +29,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <DeliveryProgressionInitializer />
           {children}
         </ThemeProvider>
       </body>

@@ -45,6 +45,7 @@ export interface Delivery {
   doctorId?: string // Assigned doctor for approval
   approvedBy?: string // Doctor who approved/denied
   approvedAt?: Date // When approved/denied
+  dispatchedAt?: Date // When drone was dispatched
   isEmergency?: boolean // Emergency request flag
 }
 

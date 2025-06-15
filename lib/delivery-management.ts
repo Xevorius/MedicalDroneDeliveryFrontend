@@ -178,15 +178,33 @@ export function approveDelivery(deliveryId: string, doctorId?: string, patientId
   if (patientId) {
     updateDeliveryStatus(deliveryId, { 
       approvalStatus: "approved",
-      status: "in-transit" 
+      status: "pending" // Keep as pending initially, progression will handle the rest
     }, "patient", patientId)
   }
   
   if (doctorId) {
     updateDeliveryStatus(deliveryId, { 
       approvalStatus: "approved",
-      status: "in-transit" 
+      status: "pending" // Keep as pending initially, progression will handle the rest
     }, "doctor", doctorId)
+  }
+
+  // Start automatic delivery progression
+  if (patientId && doctorId) {
+    // Find the delivery to get estimated time
+    const deliveries = getPatientDeliveries(patientId)
+    const delivery = deliveries.find(d => d.id === deliveryId)
+    if (delivery) {
+      // Import progression service here to avoid circular dependency
+      const { startDeliveryProgression } = require('./delivery-progression')
+      startDeliveryProgression(
+        deliveryId, 
+        patientId, 
+        doctorId, 
+        delivery.estimatedTime || 15,
+        1 // 1 minute preparation time
+      )
+    }
   }
 }
 
@@ -294,10 +312,22 @@ export function updateDeliveryApprovalStatus(
         }
       : delivery
   )
-  
-  // Save both lists with user-specific keys
+    // Save both lists with user-specific keys
   localStorage.setItem(getPatientDeliveriesKey(targetDelivery.patientId), JSON.stringify(patientUpdated))
   localStorage.setItem(getDoctorDeliveriesKey(doctorId), JSON.stringify(doctorUpdated))
+  
+  // Start automatic progression if approved
+  if (newStatus === "approved") {
+    // Import progression service here to avoid circular dependency
+    const { startDeliveryProgression } = require('./delivery-progression')
+    startDeliveryProgression(
+      deliveryId, 
+      targetDelivery.patientId, 
+      doctorId, 
+      targetDelivery.estimatedTime || 15,
+      1 // 1 minute preparation time
+    )
+  }
   
   return true
 }
