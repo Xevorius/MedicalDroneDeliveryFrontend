@@ -86,6 +86,9 @@ console.log(`
 `);
 
 // Make function available globally for testing
-window.testAutomaticProgression = testAutomaticProgression;
+if (typeof window !== 'undefined') {
+  // @ts-ignore - Adding function to global window object for testing
+  window['testAutomaticProgression'] = testAutomaticProgression;
+}
 
 console.log("🔧 Run testAutomaticProgression() to start 3-minute test");
