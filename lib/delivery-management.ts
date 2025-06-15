@@ -188,7 +188,6 @@ export function approveDelivery(deliveryId: string, doctorId?: string, patientId
       status: "pending" // Keep as pending initially, progression will handle the rest
     }, "doctor", doctorId)
   }
-
   // Start automatic delivery progression
   if (patientId && doctorId) {
     // Find the delivery to get estimated time
@@ -197,12 +196,26 @@ export function approveDelivery(deliveryId: string, doctorId?: string, patientId
     if (delivery) {
       // Import progression service here to avoid circular dependency
       const { startDeliveryProgression } = require('./delivery-progression')
+      
+      // Calculate realistic preparation time (1-3 minutes based on delivery complexity)
+      const preparationTime = delivery.priority === "emergency" ? 1 : 
+                             delivery.priority === "urgent" ? 2 : 3
+      
+      // Calculate actual delivery time (total estimated time minus preparation)
+      const totalEstimatedTime = delivery.estimatedTime || 15
+      const actualDeliveryTime = Math.max(totalEstimatedTime - preparationTime, 5) // At least 5 minutes delivery
+      
+      console.log(`🚁 Starting real delivery progression for ${deliveryId}:`)
+      console.log(`📋 Preparation time: ${preparationTime} minutes (${delivery.priority} priority)`)
+      console.log(`🚁 Delivery time: ${actualDeliveryTime} minutes`)
+      console.log(`⏰ Total time: ${preparationTime + actualDeliveryTime} minutes`)
+      
       startDeliveryProgression(
         deliveryId, 
         patientId, 
         doctorId, 
-        delivery.estimatedTime || 15,
-        1 // 1 minute preparation time
+        actualDeliveryTime, // Use calculated delivery time
+        preparationTime     // Use realistic preparation time
       )
     }
   }
@@ -315,17 +328,30 @@ export function updateDeliveryApprovalStatus(
     // Save both lists with user-specific keys
   localStorage.setItem(getPatientDeliveriesKey(targetDelivery.patientId), JSON.stringify(patientUpdated))
   localStorage.setItem(getDoctorDeliveriesKey(doctorId), JSON.stringify(doctorUpdated))
-  
-  // Start automatic progression if approved
+    // Start automatic progression if approved
   if (newStatus === "approved") {
     // Import progression service here to avoid circular dependency
     const { startDeliveryProgression } = require('./delivery-progression')
+    
+    // Calculate realistic preparation time (1-3 minutes based on delivery complexity)
+    const preparationTime = targetDelivery.priority === "emergency" ? 1 : 
+                           targetDelivery.priority === "urgent" ? 2 : 3
+    
+    // Calculate actual delivery time (total estimated time minus preparation)
+    const totalEstimatedTime = targetDelivery.estimatedTime || 15
+    const actualDeliveryTime = Math.max(totalEstimatedTime - preparationTime, 5) // At least 5 minutes delivery
+    
+    console.log(`🚁 Starting real delivery progression for ${deliveryId}:`)
+    console.log(`📋 Preparation time: ${preparationTime} minutes (${targetDelivery.priority} priority)`)
+    console.log(`🚁 Delivery time: ${actualDeliveryTime} minutes`)
+    console.log(`⏰ Total time: ${preparationTime + actualDeliveryTime} minutes`)
+    
     startDeliveryProgression(
       deliveryId, 
       targetDelivery.patientId, 
       doctorId, 
-      targetDelivery.estimatedTime || 15,
-      1 // 1 minute preparation time
+      actualDeliveryTime, // Use calculated delivery time
+      preparationTime     // Use realistic preparation time
     )
   }
   

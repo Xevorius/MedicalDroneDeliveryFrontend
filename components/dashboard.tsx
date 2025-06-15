@@ -15,7 +15,8 @@ import {
   Stethoscope,
   MapPin,
   Star,
-  Plus
+  Plus,
+  Loader2
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "components/ui/card"
 import { Badge } from "components/ui/badge"
@@ -40,6 +41,10 @@ import {
   updateDeliveryApprovalStatus,
   getDeliveriesForDoctor
 } from "lib/delivery-management"
+import { 
+  getDeliveryProgression,
+  isDeliveryInProgression 
+} from "lib/delivery-progression"
 
 interface DashboardProps {
   data: DashboardData
@@ -59,6 +64,36 @@ function getStatusBadge(status: Delivery["status"]) {
     default:
       return <Badge variant="outline">{status}</Badge>
   }
+}
+
+function getProgressionBadge(deliveryId: string) {
+  if (typeof window === 'undefined') return null
+  
+  const progression = getDeliveryProgression(deliveryId)
+  if (!progression) return null
+  
+  const now = new Date()
+  const elapsedMinutes = (now.getTime() - progression.approvedAt.getTime()) / (1000 * 60)
+  const totalTime = progression.preparationTime + progression.estimatedTime
+  const remainingTime = Math.max(0, totalTime - elapsedMinutes)
+  
+  if (elapsedMinutes < progression.preparationTime) {
+    return (
+      <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+        Preparing ({remainingTime.toFixed(0)}m)
+      </Badge>
+    )
+  } else if (remainingTime > 0) {
+    return (
+      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+        In Transit ({remainingTime.toFixed(0)}m)
+      </Badge>
+    )
+  }
+  
+  return null
 }
 
 function getPriorityBadge(priority: Delivery["priority"]) {
@@ -108,6 +143,26 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
       setCurrentDeliveries(savedDeliveries)
     }
   }, [deliveries])
+
+  // Listen for storage events to update deliveries in real-time
+  useEffect(() => {
+    const handleStorageChange = () => {
+      console.log('📡 Storage event detected in doctor dashboard')
+      
+      // Reload deliveries when storage changes
+      const session = getDoctorSession()
+      if (session) {
+        const savedDeliveries = getDoctorDeliveries(session.id)
+        setCurrentDeliveries(savedDeliveries)
+      } else {
+        const savedDeliveries = getDoctorDeliveries()
+        setCurrentDeliveries(savedDeliveries)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [])
 
   // Calculate stats from actual deliveries
   const calculatedStats = {
@@ -527,9 +582,13 @@ export function Dashboard({ data, isMockData = false }: DashboardProps) {
                   <TableRow key={delivery.id}>
                     <TableCell className="font-medium">
                       {delivery.medicationName}
+                    </TableCell>                    <TableCell>{delivery.patientId}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        {getStatusBadge(delivery.status)}
+                        {getProgressionBadge(delivery.id)}
+                      </div>
                     </TableCell>
-                    <TableCell>{delivery.patientId}</TableCell>
-                    <TableCell>{getStatusBadge(delivery.status)}</TableCell>
                     <TableCell>{getPriorityBadge(delivery.priority)}</TableCell>
                     <TableCell>{formatDateTime(delivery.requestedAt)}</TableCell>
                     <TableCell>
