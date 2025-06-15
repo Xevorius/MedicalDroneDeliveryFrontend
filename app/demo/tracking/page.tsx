@@ -21,11 +21,10 @@ const mockDelivery: Delivery = {
   id: "DEL-DEMO-001",
   medicationName: "Insulin Rapid-Acting",
   patientId: "P-12847",
-  status: "pending",
-  priority: "urgent",
+  status: "pending",  priority: "urgent",
   requestedAt: new Date(Date.now() - 2 * 60 * 1000), // 2 minutes ago
   deliveredAt: null,
-  estimatedTime: 5, // Shorter time for demo purposes (5 minutes)
+  estimatedTime: 1, // Shorter time for demo purposes (1 minute)
   actualTime: null,
   droneId: null,
   distance: "2.3 km",
@@ -39,8 +38,7 @@ export default function TrackingDemoPage() {
   const [demoDelivery, setDemoDelivery] = useState<Delivery>(mockDelivery)
   const [isProgressionActive, setIsProgressionActive] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null)
-  
-  // Check for active progression on mount
+    // Check for active progression on mount
   useEffect(() => {
     resumeDeliveryProgressions()
     
@@ -56,6 +54,23 @@ export default function TrackingDemoPage() {
       setTimeRemaining(remaining)
     }
   }, [])
+
+  // Periodic check for progression completion (fallback mechanism)
+  useEffect(() => {
+    if (!isProgressionActive) return
+
+    const progressionChecker = setInterval(() => {
+      const progression = getDeliveryProgression(mockDelivery.id)
+      if (!progression && isProgressionActive) {
+        console.log('🔄 Periodic check: Progression completed - updating to delivered')
+        setSelectedStatus('delivered')
+        setIsProgressionActive(false)
+        setTimeRemaining(null)
+      }
+    }, 2000) // Check every 2 seconds
+
+    return () => clearInterval(progressionChecker)
+  }, [isProgressionActive])
   
   // Update delivery status based on manual selection or automatic progression
   useEffect(() => {
@@ -65,45 +80,84 @@ export default function TrackingDemoPage() {
       deliveredAt: selectedStatus === 'delivered' ? new Date() : null,
       droneId: selectedStatus === 'in-transit' || selectedStatus === 'delivered' ? 'DR-405' : null
     }))
-  }, [selectedStatus])
-  
-  // Listen for storage events to update delivery status from progression
+  }, [selectedStatus])  // Listen for storage events to update delivery status from progression
   useEffect(() => {
     const handleStorageChange = () => {
+      console.log('📡 Storage event detected in demo tracking page')
+      
       // Check progression and update status accordingly
       const progression = getDeliveryProgression(mockDelivery.id)
       if (progression) {
+        console.log('🔍 Found active progression:', progression)
+        
+        // Calculate current status based on progression timing
         const now = new Date()
         const elapsedMinutes = (now.getTime() - progression.approvedAt.getTime()) / (1000 * 60)
         
+        console.log(`⏱️ Elapsed time: ${elapsedMinutes.toFixed(2)} minutes`)
+        console.log(`📋 Preparation time: ${progression.preparationTime} minutes`)
+        console.log(`🚁 Estimated time: ${progression.estimatedTime} minutes`)
+        console.log(`⏰ Total time: ${progression.preparationTime + progression.estimatedTime} minutes`)
+        
         if (elapsedMinutes >= (progression.preparationTime + progression.estimatedTime)) {
+          console.log('✅ Setting status to delivered')
           setSelectedStatus('delivered')
           setIsProgressionActive(false)
           setTimeRemaining(null)
         } else if (elapsedMinutes >= progression.preparationTime) {
+          console.log('🚁 Setting status to in-transit')
           setSelectedStatus('in-transit')
           const remaining = (progression.preparationTime + progression.estimatedTime) - elapsedMinutes
           setTimeRemaining(remaining)
         } else {
+          console.log('📋 Setting status to pending')
           setSelectedStatus('pending')
           const remaining = (progression.preparationTime + progression.estimatedTime) - elapsedMinutes
           setTimeRemaining(remaining)
+        }
+      } else {
+        console.log('⚠️ No active progression found - progression completed')
+        // If no progression exists, it means it completed successfully
+        if (isProgressionActive) {
+          console.log('✅ Progression completed - setting to delivered')
+          setSelectedStatus('delivered')
+          setIsProgressionActive(false)
+          setTimeRemaining(null)
         }
       }
     }
     
     window.addEventListener('storage', handleStorageChange)
     return () => window.removeEventListener('storage', handleStorageChange)
-  }, [])
-  
-  // Update time remaining every second
+  }, [isProgressionActive])
+    // Update time remaining every second
   useEffect(() => {
     if (!isProgressionActive || timeRemaining === null) return
     
     const interval = setInterval(() => {
       setTimeRemaining(prev => {
-        if (prev === null || prev <= 0) return null
-        return prev - (1/60) // Subtract 1 second (in minutes)
+        if (prev === null) return null
+        
+        const newTime = prev - (1/60) // Subtract 1 second (in minutes)
+        
+        // Don't immediately stop when timer hits 0 - give progression time to complete
+        if (newTime <= 0) {
+          // Check if progression is actually complete
+          const progression = getDeliveryProgression(mockDelivery.id)
+          if (!progression) {
+            // Progression is truly complete, set to delivered and stop
+            console.log('⏰ Timer expired and progression complete - setting to delivered')
+            setSelectedStatus('delivered')
+            setIsProgressionActive(false)
+            return null
+          } else {
+            // Progression still active, give it a few more seconds
+            console.log('⏰ Timer expired but progression still active - extending time')
+            return Math.max(0, newTime) // Keep at 0 but don't go negative
+          }
+        }
+        
+        return newTime
       })
     }, 1000)
     
@@ -123,18 +177,17 @@ export default function TrackingDemoPage() {
       deliveredAt: null,
       droneId: null
     })
-    
-    // Start automatic progression
+      // Start automatic progression
     startDeliveryProgression(
       mockDelivery.id,
       mockDelivery.patientId,
       "DOC-123", // Mock doctor ID
-      5, // 5 minutes estimated time for demo
+      1, // 1 minute estimated time for demo
       1  // 1 minute preparation time
     )
     
     setIsProgressionActive(true)
-    setTimeRemaining(6) // 1 minute prep + 5 minutes delivery
+    setTimeRemaining(2) // 1 minute prep + 1 minute delivery
   }
   
   const resetDemo = () => {
@@ -175,7 +228,7 @@ export default function TrackingDemoPage() {
                 Automatic Delivery Progression Demo
               </CardTitle>
               <CardDescription>
-                Watch a complete delivery lifecycle: Doctor Approval → Medication Preparation (1 min) → In Transit (5 min) → Delivered
+                Watch a complete delivery lifecycle: Doctor Approval → Medication Preparation (1 min) → In Transit (1 min) → Delivered
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -207,7 +260,7 @@ export default function TrackingDemoPage() {
                     className="flex items-center gap-2"
                   >
                     <Play className="h-4 w-4" />
-                    Start Auto Progression (6 min demo)
+                    Start Auto Progression (2 min demo)
                   </Button>
                   
                   <Button 
@@ -257,7 +310,7 @@ export default function TrackingDemoPage() {
                       <span className="font-medium text-sm">In Transit</span>
                       {selectedStatus === 'delivered' && <Badge variant="secondary">✓</Badge>}
                     </div>
-                    <p className="text-xs text-muted-foreground">5 minutes</p>
+                    <p className="text-xs text-muted-foreground">1 minute</p>
                   </div>
                   
                   <div className={`p-3 rounded-lg border ${

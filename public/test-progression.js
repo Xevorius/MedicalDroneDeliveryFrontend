@@ -58,7 +58,7 @@ async function testAutomaticProgression() {
 console.log(`
 🧪 AUTOMATIC PROGRESSION TESTING
 
-1. Quick Demo (6 minutes):
+1. Quick Demo (2 minutes):
    - Go to: /demo/tracking
    - Click "Start Auto Progression"
    - Watch the real-time progression

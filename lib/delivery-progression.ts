@@ -104,8 +104,8 @@ export function startDeliveryProgression(
         dispatchedAt: new Date()
       }, "doctor", doctorId)
     }
-    
-    // Trigger storage event for real-time updates
+      // Trigger storage event for real-time updates
+    console.log(`🔔 Triggering storage event for in-transit status`)
     window.dispatchEvent(new StorageEvent('storage', {
       key: patientId ? `medifly_patient_deliveries_${patientId}` : null,
       newValue: 'updated'
@@ -114,8 +114,7 @@ export function startDeliveryProgression(
   }, preparationTime * 60 * 1000) // Convert minutes to milliseconds
   
   timers.push(preparationTimer)
-  
-  // Step 2: Delivery Completion (estimated time after going in-transit)
+    // Step 2: Delivery Completion (estimated time after going in-transit)
   const deliveryTimer = setTimeout(() => {
     console.log(`✅ Delivery completed for delivery ${deliveryId}`)
     
@@ -124,6 +123,7 @@ export function startDeliveryProgression(
     
     // Update delivery status to delivered
     if (patientId) {
+      console.log(`📦 Updating patient delivery ${deliveryId} to delivered status`)
       updateDeliveryStatus(deliveryId, {
         status: "delivered",
         deliveredAt,
@@ -132,18 +132,20 @@ export function startDeliveryProgression(
     }
     
     if (doctorId) {
+      console.log(`📦 Updating doctor delivery ${deliveryId} to delivered status`)
       updateDeliveryStatus(deliveryId, {
         status: "delivered",
         deliveredAt,
         actualTime
       }, "doctor", doctorId)
-    }
-    
-    // Clean up progression tracking
-    removeDeliveryProgression(deliveryId)
-    clearDeliveryProgression(deliveryId)
+    }    // Clean up progression tracking after a small delay to allow UI updates
+    setTimeout(() => {
+      removeDeliveryProgression(deliveryId)
+      clearDeliveryProgression(deliveryId)
+    }, 1000) // 1 second delay for UI to update
     
     // Trigger storage event for real-time updates
+    console.log(`🔔 Triggering storage event for delivery completion`)
     window.dispatchEvent(new StorageEvent('storage', {
       key: patientId ? `medifly_patient_deliveries_${patientId}` : null,
       newValue: 'updated'
@@ -212,13 +214,12 @@ export function resumeDeliveryProgressions(): void {
           dispatchedAt: new Date(progression.approvedAt.getTime() + progression.preparationTime * 60 * 1000)
         }, "patient", progression.patientId)
       }
-      
-      if (progression.doctorId) {
+        if (progression.doctorId) {
         updateDeliveryStatus(progression.deliveryId, {
           status: "in-transit",
           droneId: `DR-${Math.floor(Math.random() * 999) + 100}`,
           dispatchedAt: new Date(progression.approvedAt.getTime() + progression.preparationTime * 60 * 1000)
-        }, "patient", progression.doctorId)
+        }, "doctor", progression.doctorId)
       }
       
       // Set timer for remaining delivery time
