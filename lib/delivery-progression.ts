@@ -1,5 +1,6 @@
 import { type Delivery } from "lib/dashboard-data"
 import { updateDeliveryStatus, getPatientDeliveries, getDoctorDeliveries } from "lib/delivery-management"
+import { NotificationService } from "lib/notification-service"
 
 // Track active progression timers
 const activeTimers = new Map<string, NodeJS.Timeout[]>()
@@ -83,8 +84,7 @@ export function startDeliveryProgression(
   addDeliveryProgression(progression)
   
   const timers: NodeJS.Timeout[] = []
-  
-  // Step 1: Medication Preparation (1 minute after approval)
+    // Step 1: Medication Preparation (1 minute after approval)
   const preparationTimer = setTimeout(() => {
     console.log(`📦 Medication preparation completed for delivery ${deliveryId}`)
     
@@ -104,6 +104,13 @@ export function startDeliveryProgression(
         dispatchedAt: new Date()
       }, "doctor", doctorId)
     }
+    
+    // Send dispatch notification
+    const deliveries = getPatientDeliveries(patientId)
+    const delivery = deliveries.find(d => d.id === deliveryId)
+    if (delivery) {
+      NotificationService.sendDeliveryDispatchedNotification(delivery)
+    }
       // Trigger storage event for real-time updates
     console.log(`🔔 Triggering storage event for in-transit status`)
     window.dispatchEvent(new StorageEvent('storage', {
@@ -120,8 +127,7 @@ export function startDeliveryProgression(
     
     const deliveredAt = new Date()
     const actualTime = Math.round((preparationTime + estimatedTime) + (Math.random() - 0.5) * 5) // Add some realistic variance
-    
-    // Update delivery status to delivered
+      // Update delivery status to delivered
     if (patientId) {
       console.log(`📦 Updating patient delivery ${deliveryId} to delivered status`)
       updateDeliveryStatus(deliveryId, {
@@ -138,7 +144,14 @@ export function startDeliveryProgression(
         deliveredAt,
         actualTime
       }, "doctor", doctorId)
-    }    // Clean up progression tracking after a small delay to allow UI updates
+    }
+    
+    // Send completion notification
+    const deliveries = getPatientDeliveries(patientId)
+    const delivery = deliveries.find(d => d.id === deliveryId)
+    if (delivery) {
+      NotificationService.sendDeliveryCompletedNotification(delivery)
+    }// Clean up progression tracking after a small delay to allow UI updates
     setTimeout(() => {
       removeDeliveryProgression(deliveryId)
       clearDeliveryProgression(deliveryId)

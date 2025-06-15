@@ -5,6 +5,7 @@ import { Geist } from "next/font/google";
 
 import { ThemeProvider } from "components/theme-provider";
 import { DeliveryProgressionInitializer } from "components/delivery-progression-initializer";
+import { ToastContainer } from "components/toast";
 
 export const metadata: Metadata = {
   title: "Medifly - Medical Supply Delivery Demo",
@@ -31,6 +32,7 @@ export default function RootLayout({
         >
           <DeliveryProgressionInitializer />
           {children}
+          <ToastContainer />
         </ThemeProvider>
       </body>
     </html>

@@ -1,5 +1,6 @@
 import { type Delivery } from "lib/dashboard-data"
 import { type MedicineOrder } from "lib/medicine-data"
+import { NotificationService } from "lib/notification-service"
 
 // Local storage keys - now user-specific
 const getPatientDeliveriesKey = (patientId: string) => `medifly_patient_deliveries_${patientId}`
@@ -188,6 +189,16 @@ export function approveDelivery(deliveryId: string, doctorId?: string, patientId
       status: "pending" // Keep as pending initially, progression will handle the rest
     }, "doctor", doctorId)
   }
+  
+  // Send approval notification
+  if (patientId) {
+    const deliveries = getPatientDeliveries(patientId)
+    const delivery = deliveries.find(d => d.id === deliveryId)
+    if (delivery) {
+      NotificationService.sendOrderApprovedNotification(delivery, "Dr. Smith")
+    }
+  }
+  
   // Start automatic delivery progression
   if (patientId && doctorId) {
     // Find the delivery to get estimated time
@@ -198,7 +209,7 @@ export function approveDelivery(deliveryId: string, doctorId?: string, patientId
       const { startDeliveryProgression } = require('./delivery-progression')
       
       // Calculate realistic preparation time (1-3 minutes based on delivery complexity)
-      const preparationTime = delivery.priority === "emergency" ? 1 : 
+      const preparationTime = delivery.priority === "emergency" ? 1 :
                              delivery.priority === "urgent" ? 2 : 3
       
       // Calculate actual delivery time (total estimated time minus preparation)
@@ -222,6 +233,15 @@ export function approveDelivery(deliveryId: string, doctorId?: string, patientId
 }
 
 export function denyDelivery(deliveryId: string, doctorId?: string, patientId?: string): void {
+  // Send denial notification first
+  if (patientId) {
+    const deliveries = getPatientDeliveries(patientId)
+    const delivery = deliveries.find(d => d.id === deliveryId)
+    if (delivery) {
+      NotificationService.sendOrderDeniedNotification(delivery, "Medical review required", "Dr. Smith")
+    }
+  }
+  
   // Update in both patient and doctor stores with user IDs
   if (patientId) {
     updateDeliveryStatus(deliveryId, { 
@@ -327,9 +347,11 @@ export function updateDeliveryApprovalStatus(
   )
     // Save both lists with user-specific keys
   localStorage.setItem(getPatientDeliveriesKey(targetDelivery.patientId), JSON.stringify(patientUpdated))
-  localStorage.setItem(getDoctorDeliveriesKey(doctorId), JSON.stringify(doctorUpdated))
-    // Start automatic progression if approved
+  localStorage.setItem(getDoctorDeliveriesKey(doctorId), JSON.stringify(doctorUpdated))    // Start automatic progression if approved
   if (newStatus === "approved") {
+    // Send approval notification first
+    NotificationService.sendOrderApprovedNotification(targetDelivery, "Dr. Smith")
+    
     // Import progression service here to avoid circular dependency
     const { startDeliveryProgression } = require('./delivery-progression')
     
@@ -353,6 +375,9 @@ export function updateDeliveryApprovalStatus(
       actualDeliveryTime, // Use calculated delivery time
       preparationTime     // Use realistic preparation time
     )
+  } else {
+    // Send denial notification
+    NotificationService.sendOrderDeniedNotification(targetDelivery, "Medical review required", "Dr. Smith")
   }
   
   return true
@@ -420,6 +445,13 @@ export function createDeliveryFromPatientRequest(
     prescriptionId: requestData.prescriptionId,
     doctorId: doctorId ?? undefined,
     isEmergency: requestData.isEmergency
+  }
+  
+  // Send notification for new order placed
+  if (requestData.isEmergency) {
+    NotificationService.sendEmergencyRequestNotification(delivery)
+  } else {
+    NotificationService.sendOrderPlacedNotification(delivery)
   }
   
   return delivery
